@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tasks CRUD</title>
+  <link rel="stylesheet" href="common.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Tasks</h1>
+    <div class="card">
+      <h3>Add / Edit Task</h3>
+      <form id="taskForm">
+        <input type="hidden" id="taskId">
+        <label>Title <input id="title" required minlength="3"></label>
+        <label>Due date <input id="due_date" type="date"></label>
+        <label>Priority (1-5) <input id="priority" type="number" min="1" max="5" required></label>
+        <label>Notes <textarea id="notes"></textarea></label>
+        <label>Status
+          <select id="status">
+            <option value="todo">To Do</option>
+            <option value="in_progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+        </label>
+        <label>Estimated hours <input id="estimated_hours" type="number" step="0.1"></label>
+        <div class="row">
+          <button type="submit">Save</button>
+          <button type="button" id="resetBtn">Reset</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Tasks list</h3>
+      <table class="table" id="tasksTable">
+        <thead><tr><th>ID</th><th>Title</th><th>Due</th><th>Priority</th><th>Status</th><th>Est hrs</th><th>Notes</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const apiBase = '/api/tasks';
+
+async function fetchTasks(){
+  const res = await fetch(apiBase);
+  const data = await res.json();
+  const tbody = document.querySelector('#tasksTable tbody');
+  tbody.innerHTML = '';
+  data.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${t.id}</td>
+      <td>${escapeHtml(t.title)}</td>
+      <td>${t.due_date || ''}</td>
+      <td>${t.priority}</td>
+      <td>${t.status || ''}</td>
+      <td>${t.estimated_hours || ''}</td>
+      <td>${escapeHtml(t.notes || '')}</td>
+      <td class="actions">
+        <button data-id="${t.id}" class="edit">Edit</button>
+        <button data-id="${t.id}" class="del">Delete</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function escapeHtml(s){ if(!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+document.getElementById('tasksTable').addEventListener('click', async (e) => {
+  if (e.target.classList.contains('del')) {
+    const id = e.target.dataset.id;
+    if (!confirm('Delete task #' + id + '?')) return;
+    const res = await fetch(apiBase + '/' + id, { method:'DELETE' });
+    if (res.status === 204) fetchTasks();
+    else alert('Delete failed');
+  } else if (e.target.classList.contains('edit')) {
+    const id = e.target.dataset.id;
+    const res = await fetch(apiBase + '/' + id);
+    if (res.ok) {
+      const t = await res.json();
+      document.getElementById('taskId').value = t.id;
+      document.getElementById('title').value = t.title;
+      document.getElementById('due_date').value = t.due_date ? t.due_date.split('T')[0] : '';
+      document.getElementById('priority').value = t.priority;
+      document.getElementById('notes').value = t.notes || '';
+      document.getElementById('status').value = t.status || 'todo';
+      document.getElementById('estimated_hours').value = t.estimated_hours || '';
+    } else alert('Load failed');
+  }
+});
+
+document.getElementById('taskForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('taskId').value;
+  const payload = {
+    title: document.getElementById('title').value,
+    due_date: document.getElementById('due_date').value || null,
+    priority: Number(document.getElementById('priority').value),
+    notes: document.getElementById('notes').value || null,
+    status: document.getElementById('status').value,
+    estimated_hours: document.getElementById('estimated_hours').value ? Number(document.getElementById('estimated_hours').value) : null
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? apiBase + '/' + id : apiBase;
+  const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  if (res.ok) {
+    fetchTasks();
+    document.getElementById('resetBtn').click();
+  } else {
+    const err = await res.json();
+    alert('Error: ' + JSON.stringify(err));
+  }
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  document.getElementById('taskId').value = '';
+  document.getElementById('title').value = '';
+  document.getElementById('due_date').value = '';
+  document.getElementById('priority').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('status').value = 'todo';
+  document.getElementById('estimated_hours').value = '';
+});
+
+fetchTasks();
+</script>
+</body>
+</html>
